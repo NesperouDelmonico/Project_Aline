@@ -1,0 +1,9 @@
+SpeechRecognition
+PyAudio
+faster-whisper
+numpy
+python-dotenv
+pyttsx3
+fish-audio-sdk>=1.0.0
+ollama
+anthropic
