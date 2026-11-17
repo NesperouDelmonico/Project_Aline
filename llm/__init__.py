@@ -1,6 +1,8 @@
 import config
 
-from .base import LLM
+from .base import LLM, LlamadaHerramienta, RespuestaLLM
+
+__all__ = ["LLM", "LlamadaHerramienta", "RespuestaLLM", "crear_llm"]
 
 
 def crear_llm() -> LLM:
@@ -8,7 +10,7 @@ def crear_llm() -> LLM:
     para no exigir instalar librerías de un proveedor que no usas."""
     if config.LLM_PROVEEDOR == "ollama":
         from .ollama_llm import OllamaLLM
-        return OllamaLLM(config.OLLAMA_MODELO, config.MAX_TOKENS)
+        return OllamaLLM(config.OLLAMA_MODELO, config.MAX_TOKENS, config.OLLAMA_NUM_CTX)
     if config.LLM_PROVEEDOR == "claude":
         from .claude_llm import ClaudeLLM
         return ClaudeLLM(config.CLAUDE_MODELO, config.ANTHROPIC_API_KEY, config.MAX_TOKENS)

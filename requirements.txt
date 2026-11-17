@@ -5,5 +5,7 @@ numpy
 python-dotenv
 pyttsx3
 fish-audio-sdk>=1.0.0
-ollama
+ollama>=0.4
 anthropic
+python-docx
+pypdf

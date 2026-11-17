@@ -1,4 +1,4 @@
-"""Oído de Alina: captura con speech_recognition, transcribe con faster-whisper."""
+"""Oído de Aline: captura con speech_recognition, transcribe con faster-whisper."""
 import numpy as np
 import speech_recognition as sr
 from faster_whisper import WhisperModel
