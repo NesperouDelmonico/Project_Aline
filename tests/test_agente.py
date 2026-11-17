@@ -204,3 +204,45 @@ def test_traduccion_claude():
     t = ClaudeLLM._traducir(HISTORIAL)
     assert t[1]["content"][0] == {"type": "tool_use", "id": "ab", "name": "leer_archivo", "input": {"ruta": "x"}}
     assert t[2] == {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "ab", "content": "texto"}]}
+
+
+# ---------- modelos que anuncian la acción sin ejecutarla ----------
+def test_agente_recuerda_usar_la_herramienta(espacio):
+    """Caso real: qwen2.5:3b respondió con texto en vez de llamar a la herramienta."""
+    modelo = ModeloGuionado([
+        RespuestaLLM("Usando búsqueda_archivos, creo que encontraré qué hay en tu carpeta de descargas."),
+        RespuestaLLM("", [LlamadaHerramienta("1", "listar_carpeta", {"carpeta": "descargas"})]),
+        RespuestaLLM("En Descargas tienes un archivo de notas."),
+    ])
+    agente, _ = _agente(modelo, {"listar_carpeta": ListarCarpeta(espacio)})
+    assert agente.procesar("¿Qué hay en mi carpeta de descargas?", "es") == "En Descargas tienes un archivo de notas."
+    assert "no ejecutaste ninguna herramienta" in modelo.vistos[1][-1]["content"]
+    assert "notas.md" in modelo.vistos[2][-1]["content"]
+
+
+def test_agente_no_insiste_en_charla_normal(espacio):
+    modelo = ModeloGuionado([RespuestaLLM("¡Hola! Estoy muy bien, ¿y tú?")])
+    agente, _ = _agente(modelo, {"listar_carpeta": ListarCarpeta(espacio)})
+    assert agente.procesar("hola, cómo estás", "es") == "¡Hola! Estoy muy bien, ¿y tú?"
+    assert len(modelo.vistos) == 1
+
+
+def test_agente_no_insiste_tras_actuar(espacio):
+    modelo = ModeloGuionado([
+        RespuestaLLM("", [LlamadaHerramienta("1", "listar_carpeta", {"carpeta": "descargas"})]),
+        RespuestaLLM("Déjame contarte: en tu carpeta de Descargas hay notas."),
+    ])
+    agente, _ = _agente(modelo, {"listar_carpeta": ListarCarpeta(espacio)})
+    assert "notas" in agente.procesar("qué hay en descargas", "es")
+    assert len(modelo.vistos) == 2
+
+
+def test_rescatar_llamadas_escritas_como_texto():
+    nombres = {"listar_carpeta"}
+    texto = 'Claro.\n<tool_call>\n{"name": "listar_carpeta", "arguments": {"carpeta": "Descargas"}}\n</tool_call>'
+    limpio, llamadas = OllamaLLM.rescatar_llamadas(texto, nombres)
+    assert limpio == "Claro." and llamadas[0].argumentos == {"carpeta": "Descargas"}
+    _, llamadas = OllamaLLM.rescatar_llamadas('{"name": "listar_carpeta", "arguments": "{}"}', nombres)
+    assert llamadas[0].nombre == "listar_carpeta"
+    assert OllamaLLM.rescatar_llamadas('{"name": "borrar_todo", "arguments": {}}', nombres)[1] == []
+    assert OllamaLLM.rescatar_llamadas("Hola, ¿qué tal?", nombres) == ("Hola, ¿qué tal?", [])

@@ -20,6 +20,8 @@ DURACION_MAX = 15            # segundos máximos por frase
 LLM_PROVEEDOR = "ollama"     # "ollama" (local) o "claude" (online)
 OLLAMA_MODELO = "qwen2.5:3b"
 OLLAMA_NUM_CTX = 8192        # contexto; con la GTX 1650 no conviene pasar de 8192
+OLLAMA_TEMPERATURA = 0.3     # baja = usa herramientas de forma más predecible
+OLLAMA_PENSAR = None         # None si el modelo no "piensa"; False para qwen3 (más rápido)
 CLAUDE_MODELO = "claude-haiku-4-5"
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 MAX_TOKENS = 1500            # alto para que pueda escribir documentos; la voz sigue breve

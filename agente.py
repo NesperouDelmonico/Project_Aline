@@ -5,6 +5,8 @@
                  └── resultado ← ejecutar (con aviso y, si hace falta, confirmación)
 """
 import json
+import re
+import unicodedata
 from collections.abc import Callable
 
 from herramientas import ErrorHerramienta, Herramienta
@@ -19,6 +21,28 @@ INSTRUCCION_IDIOMA = {
     "fr": "Réponds uniquement en français.",
     "ja": "日本語だけで答えてください。",
 }
+
+# Los modelos pequeños a veces anuncian la acción ("voy a buscar en tu carpeta…")
+# en lugar de llamar a la herramienta. Si eso pasa, se les recuerda una vez.
+INTENCION = re.compile(
+    r"\b(voy a|vamos a|dejame|deja que|usando|utilizando|usare|utilizare|buscare|revisare|"
+    r"leere|creare|let me|i will|i'll|i am going to|using)\b"
+)
+OBJETO = re.compile(
+    r"\b(carpeta|carpetas|archivo|archivos|documento|documentos|descargas|escritorio|"
+    r"folder|folders|file|files|document|documents|downloads|desktop)\b"
+)
+RECORDATORIO = (
+    "[Aviso del sistema: no ejecutaste ninguna herramienta. Si la tarea la necesita, "
+    "llámala ahora mismo sin anunciarlo. Si no la necesita, responde normalmente.]"
+)
+
+
+def _normalizar(texto: str) -> str:
+    texto = unicodedata.normalize("NFKD", texto.lower())
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    return re.sub(r"[_\-]+", " ", texto)
+
 
 MENSAJES = {
     "cancelado": "El usuario canceló esta acción. No la repitas a menos que lo pida de nuevo.",
@@ -66,11 +90,22 @@ class Agente:
         mensajes = [*self.historial, {"role": "user", "content": contenido}]
 
         final = None
+        recordado = False   # el recordatorio se da como máximo una vez por turno
+        actuo = False       # si ya usó alguna herramienta, su texto es el resumen final
         for _ in range(self.max_pasos):
             r = self.llm.responder(self.sistema, mensajes, self.esquemas)
             if not r.llamadas:
+                if self.esquemas and not (recordado or actuo) and self._anuncia_accion(r.texto):
+                    print(f"   ↻ anunció sin actuar: «{r.texto[:80]}»")
+                    mensajes += [
+                        {"role": "assistant", "content": r.texto},
+                        {"role": "user", "content": RECORDATORIO},
+                    ]
+                    recordado = True
+                    continue
                 final = r.texto
                 break
+            actuo = True
             mensajes.append({"role": "assistant", "content": r.texto, "llamadas": r.llamadas})
             for llamada in r.llamadas:
                 resultado = self._ejecutar(llamada, idioma)
@@ -86,6 +121,13 @@ class Agente:
         self.historial += [{"role": "user", "content": texto}, {"role": "assistant", "content": final}]
         self.historial = self.historial[-self.max_historial:]
         return final
+
+    def _anuncia_accion(self, texto: str) -> bool:
+        """¿El texto promete una acción con archivos que no se ejecutó?"""
+        t = _normalizar(texto or "")
+        if any(_normalizar(nombre) in t for nombre in self.herramientas):
+            return True
+        return bool(INTENCION.search(t) and OBJETO.search(t))
 
     def _ejecutar(self, llamada: LlamadaHerramienta, idioma: str) -> str:
         herramienta = self.herramientas.get(llamada.nombre)
